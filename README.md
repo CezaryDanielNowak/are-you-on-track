@@ -16,4 +16,6 @@ Installation
 ----------------
 Install script in your browser by:
 - Mozilla Firefox [GreaseMonkey](https://addons.mozilla.org/pl/firefox/addon/greasemonkey/)
-- Google Chrome [Tampermonkey](https://chrome.google.com/webstore/detail/tampermonkey/dhdgffkkebhmkfjojejmpbldmpobfkfo)
+- Google Chrome [TamperMonkey](https://chrome.google.com/webstore/detail/tampermonkey/dhdgffkkebhmkfjojejmpbldmpobfkfo)
+- Opera [Violent Monkey](https://addons.opera.com/pl/extensions/details/violent-monkey/?display=en)
+
