@@ -19,7 +19,11 @@
   /*
    * After this time, website will be blocked by captcha again.
    */
-  var allowBrowsingForMinutes = 1.5;
+  var allowBrowsingForMinutes = 2;
+  /*
+   * After this time, you don't need to type captcha.
+   */
+  var allowBreakAfterMinutes = 45;
 
   function now() {
     return 1*(new Date());
@@ -28,6 +32,18 @@
   function isAccessEnabled() {
     var lastCaptchaSolved = data.get().lastCaptchaSolved || 0;
     return now() - lastCaptchaSolved <= allowBrowsingForMinutes*60000;
+  }
+
+  function enableAccess(overlay) {
+    data.set({lastCaptchaSolved: now()});
+    document.body.removeChild(overlay);
+  }
+
+  function isBreakTime() {
+    var lastCaptchaSolved = data.get().lastCaptchaSolved || 0;
+    var diff = now() - lastCaptchaSolved;
+    
+    return lastCaptchaSolved && diff/60000 >= allowBreakAfterMinutes;
   }
 
   function domElement(element, props) {
@@ -82,7 +98,13 @@
       // triggered when captcha was typed in other tab.
       overlay && document.body.removeChild(overlay);
     } else {
+      var breakTime = isBreakTime();
+      if(breakTime && overlay) {
+        document.body.removeChild(overlay);
+        overlay = undefined;
+      }
       updateTracker();
+
       if(!overlay) {
         overlay = domElement("div", {
           style: "width:100vw; height:100vh; background: rgba(0,0,0,.92);position:fixed;top:0;left:0;z-index: 2147483647",
@@ -95,35 +117,47 @@
         });
 
         var btn = domElement("input", {
-          value: getRandomCode(),
-          type: "button",
-          oncontextmenu: function(e) {
-            e.preventDefault();
-          },
-          onclick: function() {
-            if(input.value.toUpperCase() === btn.value) {
-              data.set({lastCaptchaSolved: now()});
-              document.body.removeChild(overlay);
-            } else {
-              alert("NOPE.");
-            }
-          }
+          style: "font-family: 'Courier New', Courier, monospace;",
+          type: "button"
         });
+        if(breakTime) {
+          domElement(btn, {
+            value: "Congratz! After " + allowBreakAfterMinutes + " minutes of work, you are free to go!",
+            onclick: function() {
+              enableAccess(overlay);
+            }
+          });
+          
+          controlsContainer.appendChild(btn);
+        } else {
+          domElement(btn, {
+            value: getRandomCode(),
+            oncontextmenu: function(e) {
+              e.preventDefault();
+            },
+            onclick: function() {
+              if(input.value.toUpperCase() === btn.value) {
+                enableAccess(overlay);
+              } else {
+                alert("NOPE.");
+              }
+            }
+          });
 
-        var input = domElement("input", {
-          placeholder: "Re-type text from input: ",
-          type: "text",
-          onkeydown: function(e) {
-            if(e && e.keyCode === 13) {
-              btn.click();
+          var input = domElement("input", {
+            placeholder: "Re-type text from input: ",
+            type: "text",
+            onkeydown: function(e) {
+              if(e && e.keyCode === 13) {
+                btn.click();
+              }
             }
-          }
-        });
-        controlsContainer.appendChild(input);
+          });
+          controlsContainer.appendChild(input);
+        }
         controlsContainer.appendChild(btn);
         overlay.appendChild(controlsContainer);
         overlay.appendChild(timeTracker);
-
         document.body.appendChild(overlay);
       }
     }
@@ -132,6 +166,11 @@
   window.addEventListener("focus", onFocus);
   document.addEventListener("DOMContentLoaded", onFocus);
   setInterval(onFocus, allowBrowsingForMinutes * 60000);
+  setTimeout(function() {
+    if(window.document && window.document.body) {
+      onFocus();
+    }
+  });
 })();
 
 // ==/UserScript==
