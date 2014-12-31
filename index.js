@@ -127,8 +127,6 @@
               enableAccess(overlay);
             }
           });
-          
-          controlsContainer.appendChild(btn);
         } else {
           domElement(btn, {
             value: getRandomCode(),
