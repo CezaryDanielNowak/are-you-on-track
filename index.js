@@ -17,10 +17,6 @@
    */
   var appId = "ARE_YOU_ON_TRACK";
   /*
-   * After this time, website will be blocked by captcha again.
-   */
-  var allowBrowsingForMinutes = 2;
-  /*
    * After this time, you don't need to type captcha.
    */
   var allowBreakAfterMinutes = 45;
@@ -30,20 +26,21 @@
   }
 
   function isAccessEnabled() {
-    var lastCaptchaSolved = data.get().lastCaptchaSolved || 0;
-    return now() - lastCaptchaSolved <= allowBrowsingForMinutes*60000;
+    var accessAllowedSince = data.get().accessAllowedSince || 0;
+    return now() <= accessAllowedSince;
   }
 
-  function enableAccess(overlay) {
-    data.set({lastCaptchaSolved: now()});
+  function enableAccess(overlay, time) {
+    data.set({
+      accessAllowedSince: now() + time*60000
+    });
     document.body.removeChild(overlay);
   }
 
   function isBreakTime() {
-    var lastCaptchaSolved = data.get().lastCaptchaSolved || 0;
-    var diff = now() - lastCaptchaSolved;
-    
-    return lastCaptchaSolved && diff/60000 >= allowBreakAfterMinutes;
+    var accessAllowedSince = data.get().accessAllowedSince || 0;
+    var diff = now() - accessAllowedSince;
+    return accessAllowedSince && diff/60000 >= allowBreakAfterMinutes;
   }
 
   function domElement(element, props) {
@@ -51,7 +48,12 @@
       element = document.createElement(element);
     }
     for(var field in props) {
-      if(["innerHTML", "id", "value"].indexOf(field) !== -1 || field.substr(0, 2) === "on") {
+      if(["innerHTML", "id", "value", "for", "class"].indexOf(field) !== -1 || field.substr(0, 2) === "on") {
+        if(field === "for") {
+          field = "htmlFor";
+        } else if (field === "class") {
+          field = "className";
+        }
         element[field] = props[field];
       } else {
         element.setAttribute(field, props[field]);
@@ -60,15 +62,24 @@
     return element;
   }
 
-  function updateTracker() {
-    var diff;
-    var lastCaptchaSolved = data.get().lastCaptchaSolved || 0;
-    if(lastCaptchaSolved) {
-      diff = now() - lastCaptchaSolved;
-      timeTracker.innerHTML = "<br>Last time you've typed captcha <strong>" + (diff/60000).toFixed(2) + " minutes</strong> ago.";
-    } else {
-      timeTracker.innerHTML = "";
+  function timeTracker(whatToDo) {
+    if(!timeTracker.tracker) {
+      if(whatToDo === 'update') {
+        return; // we don't want to create element now.
+      }
+      timeTracker.tracker = domElement("div", {
+        style: "width:100vw; position:absolute; top:50%; margin-top:64px; color: #FFF; text-align:center"
+      });
     }
+    var accessAllowedSince = data.get().accessAllowedSince || 0;
+    if(accessAllowedSince) {
+      var diff = now() - accessAllowedSince;
+      timeTracker.tracker.innerHTML = "<br>Last time you've typed captcha <strong>" + (diff/60000).toFixed(2) + " minutes</strong> ago.";
+    } else {
+      timeTracker.tracker.innerHTML = "";
+    }
+
+    return timeTracker.tracker;
   }
 
   function getRandomCode() {
@@ -88,22 +99,39 @@
     }
   };
 
-  var timeTracker = domElement("div", {
-    style: "width:100vw; position:absolute; top:50%; margin-top:64px; color: #FFF; text-align:center"
-  });
+  function addButton(extraParams, input, label, overlay) {
+    extraParams.type = "button";
+    extraParams.style = "font-family: 'Lucida Console', Monaco, monospace";
+    if(label) {
+      extraParams.value = "Browse page for " + extraParams["data-time"] + " minutes...";
+      extraParams.oncontextmenu = function(e) {
+        e.preventDefault();
+      };
+      extraParams.onclick = function(e) {
+        var time = e.target.dataset.time;
+        if(label.innerHTML.toUpperCase() === input.value) {
+          enableAccess(overlay, time);
+        } else {
+          alert("NOPE.");
+        }
+      };
+    }
+    return domElement("input", extraParams);
+  }
 
   var onFocus = function() {
-    var overlay = document.querySelector("#" + appId);
+    var btn1, btn2, btn3, controlsContainer, label, input, breakTime,
+        overlay = document.querySelector("#" + appId);
     if(isAccessEnabled()) {
       // triggered when captcha was typed in other tab.
       overlay && document.body.removeChild(overlay);
     } else {
-      var breakTime = isBreakTime();
+      breakTime = isBreakTime();
       if(breakTime && overlay) {
         document.body.removeChild(overlay);
         overlay = undefined;
       }
-      updateTracker();
+      timeTracker('update');
 
       if(!overlay) {
         overlay = domElement("div", {
@@ -112,50 +140,47 @@
           innerHTML: "<h1 style='margin:-64px 0 0; font-size: 32px; color: rgb(255, 255, 255); top: 50%; position: absolute; left: 0px; right: 0px; text-align: center;'>Are you on track?</h1>"
         });
 
-        var controlsContainer = domElement("div", {
+        controlsContainer = domElement("div", {
           style: "width:100vw; position:absolute; top: 50%; margin-top:32px;text-align:center;"
         });
 
-        var btn = domElement("input", {
-          style: "font-family: 'Courier New', Courier, monospace;",
-          type: "button"
-        });
         if(breakTime) {
-          domElement(btn, {
-            value: "Congratz! After " + allowBreakAfterMinutes + " minutes of work, you are free to go!",
+          btn1 = addButton({
+            value: "Congratz! After " + allowBreakAfterMinutes + " minutes of work, you are free to go for 5 minutes!",
             onclick: function() {
-              enableAccess(overlay);
+              enableAccess(overlay, 5);
             }
           });
         } else {
-          domElement(btn, {
-            value: getRandomCode(),
-            oncontextmenu: function(e) {
-              e.preventDefault();
-            },
-            onclick: function() {
-              if(input.value.toUpperCase() === btn.value) {
-                enableAccess(overlay);
-              } else {
-                alert("NOPE.");
-              }
+          label = domElement("label", {
+            style: "margin-right:1em;font-family: 'Lucida Console', Monaco, monospace; pointer-events: none;-webkit-touch-callout: none;-webkit-user-select: none;-khtml-user-select: none;-moz-user-select: none;-ms-user-select: none;user-select: none;",
+            htmlFor: appId + "_INPUT",
+            id: appId + "_INPUT",
+            innerHTML: getRandomCode()
+          });
+
+          input = domElement("input", {
+            placeholder: "Re-type text",
+            type: "text",
+            id: appId + "_INPUT",
+            onkeydown: function(e) {
+              e && e.keyCode === 13 && btn2.click();
             }
           });
 
-          var input = domElement("input", {
-            placeholder: "Re-type text from input: ",
-            type: "text",
-            onkeydown: function(e) {
-              if(e && e.keyCode === 13) {
-                btn.click();
-              }
-            }
-          });
+          btn1 = addButton({"data-time": 2}, input, label, overlay);
+          btn2 = addButton({"data-time": 5}, input, label, overlay);
+          btn3 = addButton({"data-time": 10}, input, label, overlay);
+
+          controlsContainer.appendChild(label);
           controlsContainer.appendChild(input);
+          controlsContainer.appendChild(domElement("br"));
         }
-        controlsContainer.appendChild(btn);
+        btn1 && controlsContainer.appendChild(btn1);
+        btn2 && controlsContainer.appendChild(btn2);
+        btn3 && controlsContainer.appendChild(btn3);
         overlay.appendChild(controlsContainer);
-        overlay.appendChild(timeTracker);
+        overlay.appendChild(timeTracker());
         document.body.appendChild(overlay);
       }
     }
@@ -163,11 +188,9 @@
 
   window.addEventListener("focus", onFocus);
   document.addEventListener("DOMContentLoaded", onFocus);
-  setInterval(onFocus, allowBrowsingForMinutes * 60000);
+  setInterval(onFocus, 2 * 60000);
   setTimeout(function() {
-    if(window.document && window.document.body) {
-      onFocus();
-    }
+    window.document && window.document.body && onFocus();
   });
 })();
 
