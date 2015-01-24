@@ -26,19 +26,19 @@
   }
 
   function isAccessEnabled() {
-    var accessAllowedSince = data.get().accessAllowedSince || 0;
+    var accessAllowedSince = storage().accessAllowedSince || 0;
     return now() <= accessAllowedSince;
   }
 
   function enableAccess(overlay, time) {
-    data.set({
+    storage.set({
       accessAllowedSince: now() + time*60000
     });
     document.body.removeChild(overlay);
   }
 
   function isBreakTime() {
-    var accessAllowedSince = data.get().accessAllowedSince || 0;
+    var accessAllowedSince = storage().accessAllowedSince || 0;
     var diff = now() - accessAllowedSince;
     return accessAllowedSince && diff/60000 >= allowBreakAfterMinutes;
   }
@@ -47,16 +47,13 @@
     if(typeof element === "string") {
       element = document.createElement(element);
     }
-    for(var field in props) {
-      if(["innerHTML", "id", "value", "for", "class"].indexOf(field) !== -1 || field.substr(0, 2) === "on") {
-        if(field === "for") {
-          field = "htmlFor";
-        } else if (field === "class") {
-          field = "className";
+    if(props) {
+      for(var field in props) {
+        if(["innerHTML", "id", "value", "htmlFor", "className"].indexOf(field) !== -1 || field.substr(0, 2) === "on") {
+          element[field] = props[field];
+        } else {
+          element.setAttribute(field, props[field]);
         }
-        element[field] = props[field];
-      } else {
-        element.setAttribute(field, props[field]);
       }
     }
     return element;
@@ -71,10 +68,10 @@
         style: "width:100vw; position:absolute; top:50%; margin-top:64px; color: #FFF; text-align:center"
       });
     }
-    var accessAllowedSince = data.get().accessAllowedSince || 0;
+    var accessAllowedSince = storage().accessAllowedSince || 0;
     if(accessAllowedSince) {
       var diff = now() - accessAllowedSince;
-      timeTracker.tracker.innerHTML = "<br>Last time you've typed captcha <strong>" + (diff/60000).toFixed(2) + " minutes</strong> ago.";
+      timeTracker.tracker.innerHTML = "<br>Last site access: <strong>" + (diff/60000).toFixed(2) + " minutes</strong> ago.";
     } else {
       timeTracker.tracker.innerHTML = "";
     }
@@ -86,30 +83,29 @@
     return parseInt(Math.random()*100000000).toString(36).toUpperCase();
   }
 
-  var data = {
-    set: function(value) {
-      localStorage.setItem(appId, JSON.stringify(value));
-    },
-    get: function() {
-      var value = localStorage.getItem(appId);
-      if (typeof value === "string" && value[0] === "{") {
-        return JSON.parse(value);
-      }
-      return {};
+  function storage() {
+    var value = localStorage.getItem(appId);
+    if (typeof value === "string" && value[0] === "{") {
+      return JSON.parse(value);
     }
+    return {};
+  }
+
+  storage.set = function(value) {
+    localStorage.setItem(appId, JSON.stringify(value));
   };
 
   function addButton(extraParams, input, label, overlay) {
     extraParams.type = "button";
     extraParams.style = "font-family: 'Lucida Console', Monaco, monospace";
-    if(label) {
+    if(extraParams["data-time"]) {
       extraParams.value = "Browse page for " + extraParams["data-time"] + " minutes...";
       extraParams.oncontextmenu = function(e) {
         e.preventDefault();
       };
       extraParams.onclick = function(e) {
         var time = e.target.dataset.time;
-        if(label.innerHTML.toUpperCase() === input.value) {
+        if(label.innerHTML === input.value.toUpperCase()) {
           enableAccess(overlay, time);
         } else {
           alert("NOPE.");
